@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Create lm_eval.llm_judge package scaffold",
+      "description": "Create package directories/files and basic __init__ exports.",
+      "depends_on": [],
+      "files": ["lm_eval/llm_judge/__init__.py", "lm_eval/llm_judge/protocol.py", "lm_eval/llm_judge/base.py", "lm_eval/llm_judge/utils.py", "lm_eval/llm_judge/factory.py", "lm_eval/llm_judge/providers/openai.py", "lm_eval/llm_judge/providers/openrouter.py"]
+    },
+    {
+      "id": "T2",
+      "title": "Implement protocol dataclasses",
+      "description": "Implement ServerConfig, Request, Response as per plan.",
+      "depends_on": ["T1"],
+      "files": ["lm_eval/llm_judge/protocol.py"]
+    },
+    {
+      "id": "T3",
+      "title": "Implement ServerInterface base class",
+      "description": "Implement sync/async judge interface and convenience score helpers.",
+      "depends_on": ["T2"],
+      "files": ["lm_eval/llm_judge/base.py"]
+    },
+    {
+      "id": "T4",
+      "title": "Implement JudgePromptBuilder and ResponseParser",
+      "description": "Implement prompt-building and response-parsing utilities.",
+      "depends_on": ["T2"],
+      "files": ["lm_eval/llm_judge/utils.py"]
+    },
+    {
+      "id": "T5",
+      "title": "Implement ProviderFactory",
+      "description": "Implement provider registry, lazy loading, and factory methods.",
+      "depends_on": ["T2", "T3"],
+      "files": ["lm_eval/llm_judge/factory.py"]
+    },
+    {
+      "id": "T6",
+      "title": "Implement OpenAIProvider",
+      "description": "Implement sync/async OpenAI provider with retries and error handling.",
+      "depends_on": ["T3", "T4"],
+      "files": ["lm_eval/llm_judge/providers/openai.py"]
+    },
+    {
+      "id": "T7",
+      "title": "Implement OpenRouterProvider",
+      "description": "Implement sync/async OpenRouter provider with retries and error handling.",
+      "depends_on": ["T3", "T4"],
+      "files": ["lm_eval/llm_judge/providers/openrouter.py"]
+    },
+    {
+      "id": "T8",
+      "title": "Wire providers into ProviderFactory",
+      "description": "Ensure OpenAI and OpenRouter providers are lazily registered.",
+      "depends_on": ["T5", "T6", "T7"],
+      "files": ["lm_eval/llm_judge/factory.py"]
+    },
+    {
+      "id": "T9",
+      "title": "Implement DeepEval helpers",
+      "description": "Implement _build_evaluation_params and _build_test_case.",
+      "depends_on": [],
+      "files": ["lm_eval/api/metrics_llm_judge.py"]
+    },
+    {
+      "id": "T10",
+      "title": "Implement g_eval metric",
+      "description": "Implement g_eval_fn wrapper around GEval with criteria/evaluation_steps handling.",
+      "depends_on": ["T9"],
+      "files": ["lm_eval/api/metrics_llm_judge.py"]
+    },
+    {
+      "id": "T11",
+      "title": "Implement answer_relevancy metric",
+      "description": "Implement answer_relevancy_fn wrapper around AnswerRelevancyMetric.",
+      "depends_on": ["T9"],
+      "files": ["lm_eval/api/metrics_llm_judge.py"]
+    },
+    {
+      "id": "T12",
+      "title": "Implement faithfulness metric",
+      "description": "Implement faithfulness_fn wrapper around FaithfulnessMetric.",
+      "depends_on": ["T9"],
+      "files": ["lm_eval/api/metrics_llm_judge.py"]
+    },
+    {
+      "id": "T13",
+      "title": "Register DeepEval metrics",
+      "description": "Decorate DeepEval metrics with @register_metric and verify names.",
+      "depends_on": ["T10", "T11", "T12"],
+      "files": ["lm_eval/api/metrics_llm_judge.py"]
+    },
+    {
+      "id": "T14",
+      "title": "Guarded import of metrics_llm_judge",
+      "description": "Add optional import of metrics_llm_judge in central metrics registry.",
+      "depends_on": ["T13"],
+      "files": ["lm_eval/api/metrics.py", "lm_eval/api/metrics_llm_judge.py"]
+    },
+    {
+      "id": "T15",
+      "title": "Add example task YAML using judge metrics",
+      "description": "Create or update a task YAML using g_eval/answer_relevancy/faithfulness.",
+      "depends_on": ["T13", "T14"],
+      "files": ["lm_eval/tasks/"]
+    },
+    {
+      "id": "T16",
+      "title": "Unit tests for protocol and utils",
+      "description": "Test ServerConfig/Request/Response and prompt/parse helpers.",
+      "depends_on": ["T2", "T4"],
+      "files": ["tests/test_llm_judge_protocol_utils.py"]
+    },
+    {
+      "id": "T17",
+      "title": "Unit tests for ServerInterface",
+      "description": "Test semaphore, prepare_messages, and evaluate_batch_async via dummy subclass.",
+      "depends_on": ["T3"],
+      "files": ["tests/test_llm_judge_base.py"]
+    },
+    {
+      "id": "T18",
+      "title": "Unit tests for ProviderFactory",
+      "description": "Test lazy loading, defaults, error cases, and custom registration.",
+      "depends_on": ["T5", "T8"],
+      "files": ["tests/test_llm_judge_factory.py"]
+    },
+    {
+      "id": "T19",
+      "title": "Unit tests for providers",
+      "description": "Test OpenAI/OpenRouter providers using mocks (payloads, retries, errors).",
+      "depends_on": ["T6", "T7"],
+      "files": ["tests/test_llm_judge_providers.py"]
+    },
+    {
+      "id": "T20",
+      "title": "Unit tests for DeepEval metrics",
+      "description": "Test DeepEval metric wrappers using mocks and criteria vs evaluation_steps logic.",
+      "depends_on": ["T10", "T11", "T12"],
+      "files": ["tests/test_metrics_llm_judge.py"]
+    },
+    {
+      "id": "T21",
+      "title": "Integration test for judge metrics in ConfigurableTask",
+      "description": "Run a small ConfigurableTask with judge metrics and verify scoring/aggregation.",
+      "depends_on": ["T13", "T14", "T15"],
+      "files": ["tests/test_integration_llm_judge_metrics.py"]
+    },
+    {
+      "id": "T22",
+      "title": "Optional CLI smoke test",
+      "description": "Run CLI with a tiny task and judge metrics under low --limit to verify wiring.",
+      "depends_on": ["T21"],
+      "files": ["tests/test_cli_llm_judge_smoke.py"]
+    }
+  ]
+}
+
