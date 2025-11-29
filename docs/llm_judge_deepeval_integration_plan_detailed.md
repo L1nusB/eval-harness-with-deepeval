@@ -14,6 +14,56 @@ This plan details integrating LLM-as-a-Judge capabilities and DeepEval metrics i
 
 ---
 
+## Phase 1: Baseline & Scope
+
+### 1.1 Motivation & High-Level Goals
+
+- Extend this fork of `lm-evaluation-harness` with **LLM-as-a-judge** evaluation, driven by DeepEval metrics such as GEval, Answer Relevancy, and Faithfulness.
+- Keep the **core evaluation pipeline unchanged**:
+  - CLI → `evaluator.simple_evaluate` / `evaluate`
+  - YAML task configs → `ConfigurableTask` → `process_results` → metrics → aggregation.
+- Introduce an `lm_eval.llm_judge` adapter layer for LLM judge providers (OpenAI, OpenRouter), and expose **judge-backed metrics as first-class metrics** configured via YAML `metric_list`.
+
+### 1.2 Current Metrics Pipeline (Summary)
+
+Key points (see `docs/metrics_workflow_analysis.md` for full details):
+
+- Tasks are configured via YAML under `lm_eval/tasks/**`.
+- `ConfigurableTask` resolves metrics via the registry and stores two core structures:
+  - `_metric_fn_list[metric_name]` – the Python callable implementing that metric.
+  - `_metric_fn_kwargs[metric_name]` – kwargs taken from the corresponding `metric_list` entry in YAML (excluding reserved keys like `metric`, `aggregation`, `higher_is_better`, `hf_evaluate`).
+- For `generate_until` output type, per-document metric computation looks like:
+
+  ```python
+  result_score = self._metric_fn_list[metric](
+      references=[gold],
+      predictions=[result],
+      **self._metric_fn_kwargs[metric],
+  )
+  ```
+
+- Metrics return **per-sample scalar values**, which are then aggregated by `TaskOutput.calculate_aggregate_metric()` using registered aggregation functions (e.g. `mean`).
+
+### 1.3 Target Architecture
+
+- Do **not** modify evaluator control flow, request construction, or aggregation.
+- Add a **text-only** LLM-judge adapter in `lm_eval/llm_judge` that:
+  - Wraps providers such as OpenAI and OpenRouter behind a small, stable interface.
+  - Encapsulates retry logic, timeouts, and limited concurrency for judge calls.
+- Implement DeepEval-backed metrics as normal metrics in the registry:
+  - Registered via `@register_metric`.
+  - Invoked from `process_results` with the standard `(references, predictions, **kwargs)` signature.
+  - Configured from YAML `metric_list` entries without adding new CLI flags.
+
+### 1.4 Non-Goals and Out-of-Scope
+
+- Do not integrate DeepEval's tracing, datasets, or evaluation runners; we only reuse its **metric implementations**.
+- Do not introduce multi-modal judging or tool-based judging in this iteration; all judge interactions are **text-only**.
+- Do not change existing caching or aggregation semantics; any caching of judge calls is a future optimisation.
+- This document is intended to be **self-contained** and supersedes the high-level outline in `docs/llm_judge_deepeval_integration_plan.md`, while still referencing it as historical background.
+
+---
+
 ## Phase 2: LLM-Judge Adapter Package
 
 ### 2.1 Package Structure
@@ -34,6 +84,8 @@ lm_eval/llm_judge/
 ### 2.2 File: `lm_eval/llm_judge/protocol.py`
 
 **Purpose:** Define core data structures for judge communication.
+
+These dataclasses provide a **provider-agnostic contract** between any judge-backed metric (or higher-level caller) and concrete providers such as OpenAI and OpenRouter.
 
 ```python
 """Data classes for LLM judge communication protocol."""
@@ -117,9 +169,21 @@ class Response:
     error_message: Optional[str] = None
 ```
 
+#### 2.2.1 Design Notes
+
+- **`ServerConfig`** represents *default configuration* for a judge provider instance (model name, temperature, max tokens, retries, timeouts, and concurrency via `max_concurrent`).
+  - Metric wrappers may override these defaults per-call by passing a `config` override on the `Request`.
+  - `max_concurrent` governs how many in-flight judge requests are allowed per process and is enforced via an `asyncio.Semaphore` in `ServerInterface`.
+- **`Request`** carries both:
+  - The raw `messages` payload (chat-style) that will be sent to the provider.
+  - Structured fields (`question`, `answer`, `prediction`, `context`, `prompt_kwargs`) that are useful for logging and for building prompts via helper utilities.
+- **`Response`** separates raw text (`content`) from structured interpretation (`parsed_result`) and status (`success`, `error_message`, optional `usage`), so metrics can reliably detect and react to failures instead of relying on exceptions.
+
 ### 2.3 File: `lm_eval/llm_judge/base.py`
 
 **Purpose:** Abstract base class defining both sync and async judge interfaces.
+
+This class defines the **minimal contract** that all judge providers must implement so that higher-level code can call them uniformly.
 
 ```python
 """Abstract base classes for LLM judge implementations."""
@@ -258,6 +322,14 @@ class ServerInterface(abc.ABC):
         }
 ```
 
+#### 2.3.1 Async Semantics
+
+- The overall harness remains **synchronous**, so `evaluate()` must be a blocking call that returns a completed `Response`.
+- `evaluate_async()` exposes an async variant for libraries or future callers that want to manage their own event loop and fine-grained scheduling.
+- `evaluate_batch_async()` centralises concurrency limits using the `ServerConfig.max_concurrent` semaphore; callers should prefer this rather than creating ad-hoc `asyncio.gather` calls, to respect provider rate limits.
+
+In v1, DeepEval-backed metrics call DeepEval's own async/sync APIs directly. The `ServerInterface` async support is included from the start so that **non-DeepEval custom judge metrics** and future enhancements can make use of it.
+
 ### 2.4 File: `lm_eval/llm_judge/utils.py`
 
 **Purpose:** Helper classes for prompt building and response parsing.
@@ -383,6 +455,10 @@ class ResponseParser:
 
 **Purpose:** Factory pattern for creating provider instances.
 
+This factory hides import-time errors (missing packages, missing API keys) and provides a
+single entrypoint for constructing judge providers based on configuration or environment
+variables.
+
 ```python
 """Factory for creating LLM judge provider instances."""
 import logging
@@ -453,6 +529,15 @@ class ProviderFactory:
         cls._lazy_load_providers()
         return list(cls._provider_classes.keys())
 ```
+
+#### 2.5.1 Provider Selection & Failure Modes
+
+- `create_provider()` chooses a provider type from, in order of precedence:
+  1. Explicit `provider_type` argument.
+  2. `JUDGE_API_TYPE` environment variable (e.g. `openai`, `openrouter`).
+  3. A sensible default (`openai`) if nothing else is specified.
+- If a provider cannot be imported (e.g. `openai` package is missing), it is simply **not registered** in `_provider_classes`, and `create_provider()` will raise a clear `ValueError` if that provider is requested.
+- This design allows the core library to import without requiring all provider dependencies to be installed; users only need to install the providers they actually use.
 
 ### 2.6 File: `lm_eval/llm_judge/providers/openai.py`
 
@@ -755,6 +840,12 @@ __all__ = [
 ]
 ```
 
+### 2.9 Summary and Relationship to DeepEval
+
+- The `lm_eval.llm_judge` package provides a **general-purpose adapter** for calling external LLMs as judges.
+- In the initial implementation, the DeepEval-backed metrics described in Phase 3 use **DeepEval's own model integration layer** (configured via the `model` argument and environment variables) rather than going through `ServerInterface`.
+- This separation keeps the v1 integration simple while still enabling future work where DeepEval is driven via a `ServerInterface`-compatible wrapper, or where non-DeepEval judge metrics reuse the same provider infrastructure.
+
 ---
 
 ## Phase 3: DeepEval Metric Wrappers
@@ -776,7 +867,7 @@ result_score = self._metric_fn_list[metric](
 
 **Purpose:** DeepEval-backed metrics registered for use in task YAMLs. DeepEval is a required dependency.
 
-```python
+	```python
 """LLM-as-Judge metrics using DeepEval for lm-evaluation-harness.
 
 DeepEval is a required dependency. Install with: pip install deepeval
@@ -886,23 +977,35 @@ def g_eval_fn(
     Returns:
         float: Score between 0.0 and 1.0
     """
-    expected = references[0] if references else None
-    actual = predictions[0] if predictions else ""
+	    expected = references[0] if references else None
+	    actual = predictions[0] if predictions else ""
 
-    # Build evaluation parameters based on available data
-    eval_params = _build_evaluation_params(input_text, expected, context, retrieval_context)
+	    # Build evaluation parameters based on available data
+	    eval_params = _build_evaluation_params(input_text, expected, context, retrieval_context)
 
-    # Create GEval metric
-    metric = GEval(
-        name="g_eval",
-        criteria=criteria,
-        evaluation_steps=evaluation_steps,
-        evaluation_params=eval_params,
-        model=judge_model,
-        threshold=threshold,
-        strict_mode=strict_mode,
-        async_mode=async_mode,
-    )
+	    # Create GEval metric
+	    # NOTE: DeepEval expects either `criteria` or `evaluation_steps`, but not both.
+	    # If `evaluation_steps` are provided, they take precedence over `criteria`.
+	    if evaluation_steps:
+	        metric = GEval(
+	            name="g_eval",
+	            evaluation_steps=evaluation_steps,
+	            evaluation_params=eval_params,
+	            model=judge_model,
+	            threshold=threshold,
+	            strict_mode=strict_mode,
+	            async_mode=async_mode,
+	        )
+	    else:
+	        metric = GEval(
+	            name="g_eval",
+	            criteria=criteria,
+	            evaluation_params=eval_params,
+	            model=judge_model,
+	            threshold=threshold,
+	            strict_mode=strict_mode,
+	            async_mode=async_mode,
+	        )
 
     # Build test case
     test_case = _build_test_case(
@@ -1055,6 +1158,34 @@ def faithfulness_fn(
     return metric.score if metric.score is not None else 0.0
 ```
 
+#### 3.2.1 Metric Semantics
+
+- **`g_eval_fn` (GEval)**
+  - **Inputs:**
+    - `references[0]` (if present) is treated as the `expected_output` / gold answer.
+    - `predictions[0]` is treated as the `actual_output` produced by the model.
+    - Optional `input_text`, `context`, and `retrieval_context` kwargs provide additional information for the judge and are reflected in the selected `LLMTestCaseParams`.
+  - **Behaviour:**
+    - Constructs a DeepEval `GEval` metric using either a natural-language `criteria` *or* explicit `evaluation_steps` (if provided).
+    - Evaluates a single `LLMTestCase` and returns a scalar score in `[0.0, 1.0]`.
+- **`answer_relevancy_fn`**
+  - **Inputs:**
+    - `predictions[0]` → `actual_output`.
+    - `input_text` (if provided) → `LLMTestCase.input`.
+  - **Behaviour:**
+    - Uses DeepEval's `AnswerRelevancyMetric` to score how relevant the model output is to the input query.
+    - This is a **reference-free** metric; `references` are ignored.
+- **`faithfulness_fn`**
+  - **Inputs:**
+    - `predictions[0]` → `actual_output`.
+    - `input_text` (optional) → `LLMTestCase.input`.
+    - `retrieval_context` (optional list of strings) → `LLMTestCase.retrieval_context`.
+  - **Behaviour:**
+    - Uses DeepEval's `FaithfulnessMetric` to score factual consistency with the provided retrieval context.
+    - Intended primarily for RAG-style tasks where meaningful context is available.
+
+In all three wrappers, DeepEval's own LLM integration is used, configured via the `judge_model` argument and relevant environment variables. These wrappers **do not** yet call through `lm_eval.llm_judge.ServerInterface`.
+
 ### 3.3 Ensure Metrics Are Loaded
 
 Add to the end of `lm_eval/api/metrics.py`:
@@ -1067,6 +1198,8 @@ except ImportError:
     pass  # LLM judge metrics not available
 ```
 
+If `deepeval` is not installed, importing `lm_eval.api.metrics_llm_judge` will fail. The guarded import in `metrics.py` ensures that in this case, **judge-backed metrics are simply not registered**, and attempting to use them in YAML will behave like any other unknown metric name.
+
 ---
 
 ## Phase 4: YAML Configuration and Task Integration
@@ -1074,6 +1207,24 @@ except ImportError:
 ### 4.1 Kwargs Flow Diagram
 
 ```
+
+#### 4.1.1 Narrative Explanation
+
+- Users configure judge-backed metrics **exclusively via YAML** entries in `metric_list`.
+- For each metric entry, `ConfigurableTask`:
+  - Filters out known keys (`metric`, `aggregation`, `higher_is_better`, `hf_evaluate`).
+  - Stores the remaining keys verbatim in `self._metric_fn_kwargs[metric_name]`.
+- During `process_results`, each metric is called with:
+
+  ```python
+  metric_fn(
+      references=[gold],
+      predictions=[result],
+      **self._metric_fn_kwargs[metric_name],
+  )
+  ```
+
+- As a result, all judge-specific options (e.g., `criteria`, `evaluation_steps`, `judge_model`, `threshold`, `async_mode`, `input_text`, `context`, `retrieval_context`) are forwarded unchanged from YAML to the metric function.
 YAML metric_list entry:
     metric: g_eval
     aggregation: mean
@@ -1182,6 +1333,26 @@ metadata:
   version: 1.0
 ```
 
+### 4.3 Input and Context Limitations (Current) and Future Extensions
+
+- **Current v1 behaviour:**
+  - Judge metric wrappers accept `input_text`, `context`, and `retrieval_context` **only as static kwargs** coming from the YAML `metric_list` entry.
+  - These values are therefore **global for the entire evaluation run**, not per-example.
+  - There is currently no dedicated hook (such as `doc_to_input`) that automatically passes the per-example prompt or context into judge metrics.
+- **Future extension (out-of-scope for the initial implementation):**
+  - Introduce a `doc_to_input` or more general `doc_to_metric_inputs` callable on `Task` that, for each `doc`, returns a structure such as:
+
+    ```python
+    {
+        "input_text": ...,
+        "context": ...,
+        "retrieval_context": [...],
+    }
+    ```
+
+  - Extend `process_results` to merge these per-example values into the kwargs passed to judge metrics.
+  - This would enable more faithful use of metrics like Answer Relevancy and Faithfulness without complicating the CLI or YAML surface.
+
 ---
 
 ## Phase 5: Practical Considerations
@@ -1236,6 +1407,29 @@ llm_judge = [
 ```
 
 **Note:** The `llm_judge` extra includes all dependencies needed for LLM-as-Judge metrics. DeepEval is a required dependency, not optional.
+
+### 5.4 Error Handling and Failure Modes
+
+- **Missing DeepEval dependency:**
+  - If `deepeval` is not installed, importing `lm_eval.api.metrics_llm_judge` will fail, and the guarded import in `metrics.py` will silently skip registering judge metrics.
+  - Attempting to use `g_eval`, `answer_relevancy`, or `faithfulness` in YAML will then behave like any other unknown metric name (config error rather than runtime crash).
+- **Provider configuration errors:**
+  - Judge providers (`OpenAIProvider`, `OpenRouterProvider`) expose `is_available()` and return `Response(success=False, error_message=...)` when API keys or required packages are missing.
+  - Callers and metrics are expected to check `Response.success` and may choose to log and fall back rather than crash.
+- **Network / runtime errors inside metrics:**
+  - The metric wrappers should catch DeepEval-related exceptions, log them via `eval_logger`, and either:
+    - return a default score (e.g. `0.0`) to allow the run to complete (fail-soft), or
+    - re-raise to fail-fast.
+  - The preferred policy for this integration is **fail-soft**, returning `0.0` and logging enough context to debug, so that evaluations can still complete even if some judge calls fail.
+
+### 5.5 Caching and Reproducibility (Future Work)
+
+- **Caching:**
+  - The existing harness `cache_requests` infrastructure caches model outputs, not judge calls.
+  - A future enhancement could introduce a small cache (e.g. JSONL or SQLite) keyed by task name, doc ID, metric name, judge model, and key judge kwargs to avoid re-paying for identical evaluations.
+- **Determinism:**
+  - All judge models should default to deterministic settings (`temperature=0.0`, `top_p=1.0`).
+  - Some APIs may still exhibit minor non-determinism; for highly sensitive benchmarks, it may be useful to repeat runs and average judge scores.
 
 ---
 
@@ -1305,11 +1499,38 @@ docs: add llm_judge usage documentation
 ---
 
 ## Testing Strategy
-
-1. **Unit Tests**: Test each component in isolation (protocol, utils, providers)
-2. **Integration Tests**: Test metric functions with mock providers
-3. **End-to-End Tests**: Test full evaluation pipeline with real API calls (limited samples)
-4. **Cost Control**: Use `--limit 5` for development testing
+	
+	### 7.1 Unit Tests
+	
+	- **Protocol and base classes**
+	  - Verify `ServerConfig` defaults (timeouts, retries, concurrency) and basic dataclass behaviour.
+	  - Test `ServerInterface.prepare_messages` (e.g. system prompt insertion) and `evaluate_batch_async` semaphore-limited concurrency using a fake subclass.
+	- **ProviderFactory**
+	  - Ensure providers are lazily registered and that `available_providers()` reflects the installed set.
+	  - Confirm that unknown provider types raise a clear `ValueError`.
+	- **OpenAIProvider / OpenRouterProvider** (with mocked HTTP / clients)
+	  - Test happy-path responses (content, model_used, usage, `success=True`).
+	  - Test retry behaviour and final `success=False` responses when exceptions are raised.
+	
+	### 7.2 DeepEval Metric Wrapper Tests
+	
+	- Mock `GEval`, `AnswerRelevancyMetric`, and `FaithfulnessMetric` so they do not perform real network calls.
+	- Verify that:
+	  - `g_eval_fn` constructs GEval with **either** `criteria` **or** `evaluation_steps` and selects the correct `LLMTestCaseParams` based on the presence of `input_text`, `expected_output`, `context`, and `retrieval_context`.
+	  - `answer_relevancy_fn` and `faithfulness_fn` correctly map `predictions[0]` and optional kwargs into `LLMTestCase` fields.
+	  - Async paths (`async_mode=True`) and sync fallbacks behave as expected.
+	
+	### 7.3 Integration and End-to-End Tests
+	
+	- **Integration tests (no real network):**
+	  - Register fake DeepEval metrics that return deterministic scores and confirm that the harness calls them once per example, and that aggregations (mean) behave correctly.
+	- **CLI end-to-end tests (optional, low volume):**
+	  - Use a tiny synthetic task and a judge metric (e.g. `g_eval`) with a mocked or low-cost model to verify full pipeline behaviour via the `lm_eval` CLI.
+	  - Focus on:
+	    - Correct wiring of YAML → metrics → results JSON.
+	    - Behaviour when judge metrics are unavailable (e.g. missing dependencies or API keys).
+	- **Cost control during tests:**
+	  - Use `--limit 5` or smaller for any tests hitting real APIs.
 
 ---
 
