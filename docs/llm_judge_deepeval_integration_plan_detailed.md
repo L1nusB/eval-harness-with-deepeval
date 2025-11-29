@@ -90,7 +90,7 @@ These dataclasses provide a **provider-agnostic contract** between any judge-bac
 ```python
 """Data classes for LLM judge communication protocol."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 
 DEFAULT_NUM_RETRIES = 3
@@ -117,13 +117,13 @@ class ServerConfig:
     model_name: str
     temperature: float = 0.0
     max_tokens: int = 1024
-    top_p: Optional[float] = None
+    top_p: float | None = None
     timeout: int = DEFAULT_TIMEOUT
     num_retries: int = DEFAULT_NUM_RETRIES
     retry_delay: float = DEFAULT_RETRY_DELAY
     max_concurrent: int = 10  # For async batching rate limiting
-    system_prompt: Optional[str] = None
-    response_format: Optional[str] = None  # 'json' or 'text'
+    system_prompt: str | None = None
+    response_format: str | None = None  # 'json' or 'text'
 
 
 @dataclass
@@ -138,13 +138,13 @@ class Request:
         prediction: Model prediction to evaluate
         context: Additional context for evaluation
     """
-    messages: List[Dict[str, Any]]
-    config: Optional[ServerConfig] = None
-    question: Optional[str] = None
-    answer: Optional[str] = None
-    prediction: Optional[str] = None
-    context: Optional[str] = None
-    prompt_kwargs: Dict[str, Any] = field(default_factory=dict)
+    messages: list[dict[str, Any]]
+    config: ServerConfig | None = None
+    question: str | None = None
+    answer: str | None = None
+    prediction: str | None = None
+    context: str | None = None
+    prompt_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -162,11 +162,11 @@ class Response:
     """
     content: str
     model_used: str
-    usage: Optional[Dict[str, int]] = None
-    raw_response: Optional[Any] = None
-    parsed_result: Optional[Union[int, float, bool, Dict[str, Any]]] = None
+    usage: dict[str, int] | None = None
+    raw_response: Any | None = None
+    parsed_result: int | float | bool | dict[str, Any] | None = None
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
 ```
 
 #### 2.2.1 Design Notes
@@ -190,7 +190,7 @@ This class defines the **minimal contract** that all judge providers must implem
 import abc
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .protocol import Request, Response, ServerConfig
 
@@ -207,10 +207,10 @@ class ServerInterface(abc.ABC):
         - is_available() -> bool
     """
 
-    def __init__(self, config: Optional[ServerConfig] = None):
+    def __init__(self, config: ServerConfig | None = None):
         """Initialize with optional default configuration."""
         self.config = config or ServerConfig(model_name="gpt-4o")
-        self._semaphore: Optional[asyncio.Semaphore] = None
+        self._semaphore: asyncio.Semaphore | None = None
 
     @property
     def semaphore(self) -> asyncio.Semaphore:
@@ -235,7 +235,7 @@ class ServerInterface(abc.ABC):
         """Check if the judge service is available (e.g., API key configured)."""
         pass
 
-    def prepare_messages(self, request: Request) -> List[Dict[str, Any]]:
+    def prepare_messages(self, request: Request) -> list[dict[str, Any]]:
         """Prepare messages in the format expected by the API."""
         messages = request.messages.copy()
 
@@ -247,7 +247,7 @@ class ServerInterface(abc.ABC):
 
         return messages
 
-    async def evaluate_batch_async(self, requests: List[Request]) -> List[Response]:
+    async def evaluate_batch_async(self, requests: list[Request]) -> list[Response]:
         """Evaluate multiple requests concurrently with rate limiting."""
         async def _eval_with_semaphore(req: Request) -> Response:
             async with self.semaphore:
@@ -259,11 +259,11 @@ class ServerInterface(abc.ABC):
         self,
         question: str,
         prediction: str,
-        answer: Optional[str] = None,
-        context: Optional[str] = None,
-        prompt_template: Optional[str] = None,
+        answer: str | None = None,
+        context: str | None = None,
+        prompt_template: str | None = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Convenience method for scoring evaluation (sync)."""
         from .utils import JudgePromptBuilder, ResponseParser
 
@@ -292,11 +292,11 @@ class ServerInterface(abc.ABC):
         self,
         question: str,
         prediction: str,
-        answer: Optional[str] = None,
-        context: Optional[str] = None,
-        prompt_template: Optional[str] = None,
+        answer: str | None = None,
+        context: str | None = None,
+        prompt_template: str | None = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Convenience method for scoring evaluation (async)."""
         from .utils import JudgePromptBuilder, ResponseParser
 
@@ -338,7 +338,7 @@ In v1, DeepEval-backed metrics call DeepEval's own async/sync APIs directly. The
 """Utility classes for LLM judge prompt building and response parsing."""
 import json
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 
 DEFAULT_SCORE_PROMPT = """You are an expert evaluator. Rate the quality of the given response.
@@ -363,9 +363,9 @@ class JudgePromptBuilder:
     def build_score_prompt(
         question: str,
         prediction: str,
-        answer: Optional[str] = None,
-        context: Optional[str] = None,
-        prompt_template: Optional[str] = None,
+        answer: str | None = None,
+        context: str | None = None,
+        prompt_template: str | None = None,
         **kwargs
     ) -> str:
         """Build a scoring prompt."""
@@ -386,12 +386,12 @@ class JudgePromptBuilder:
     @staticmethod
     def build_geval_prompt(
         criteria: str,
-        evaluation_steps: Optional[list] = None,
-        input_text: Optional[str] = None,
+        evaluation_steps: list | None = None,
+        input_text: str | None = None,
         actual_output: str = "",
-        expected_output: Optional[str] = None,
-        context: Optional[str] = None,
-        retrieval_context: Optional[str] = None,
+        expected_output: str | None = None,
+        context: str | None = None,
+        retrieval_context: str | None = None,
     ) -> str:
         """Build a G-Eval style prompt with criteria and evaluation steps."""
         prompt_parts = [f"Evaluation Criteria: {criteria}\n"]
@@ -424,7 +424,7 @@ class ResponseParser:
     """Helper class to parse different types of judge responses."""
 
     @staticmethod
-    def parse_score_response(response: str, score_range: Tuple[float, float] = (0.0, 1.0)) -> float:
+    def parse_score_response(response: str, score_range: tuple[float, float] = (0.0, 1.0)) -> float:
         """Parse a numeric score from response text."""
         try:
             numbers = re.findall(r"-?\d+(?:\.\d+)?", response.strip())
@@ -436,7 +436,7 @@ class ResponseParser:
         return score_range[0]
 
     @staticmethod
-    def parse_json_response(response: str) -> Dict[str, Any]:
+    def parse_json_response(response: str) -> dict[str, Any]:
         """Parse JSON from response text."""
         try:
             return json.loads(response.strip())
@@ -463,7 +463,6 @@ variables.
 """Factory for creating LLM judge provider instances."""
 import logging
 import os
-from typing import Dict, Optional, Type
 
 from .base import ServerInterface
 from .protocol import ServerConfig
@@ -475,7 +474,7 @@ eval_logger = logging.getLogger(__name__)
 class ProviderFactory:
     """Factory for creating judge provider instances based on configuration."""
 
-    _provider_classes: Dict[str, Type[ServerInterface]] = {}
+    _provider_classes: dict[str, type[ServerInterface]] = {}
 
     @classmethod
     def _lazy_load_providers(cls) -> None:
@@ -498,8 +497,8 @@ class ProviderFactory:
     @classmethod
     def create_provider(
         cls,
-        provider_type: Optional[str] = None,
-        config: Optional[ServerConfig] = None,
+        provider_type: str | None = None,
+        config: ServerConfig | None = None,
     ) -> ServerInterface:
         """Create a judge provider instance."""
         cls._lazy_load_providers()
@@ -517,7 +516,7 @@ class ProviderFactory:
         return provider_class(config=config)
 
     @classmethod
-    def register_provider(cls, name: str, provider_class: Type[ServerInterface]) -> None:
+    def register_provider(cls, name: str, provider_class: type[ServerInterface]) -> None:
         """Register a custom provider implementation."""
         if not issubclass(provider_class, ServerInterface):
             raise ValueError(f"{provider_class.__name__} must subclass ServerInterface")
@@ -549,7 +548,7 @@ import asyncio
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ServerInterface
 from ..protocol import Request, Response, ServerConfig
@@ -566,7 +565,7 @@ class OpenAIProvider(ServerInterface):
         OPENAI_API_BASE: Base URL for API (optional, for proxies)
     """
 
-    def __init__(self, config: Optional[ServerConfig] = None):
+    def __init__(self, config: ServerConfig | None = None):
         if config is None:
             config = ServerConfig(model_name="gpt-4o")
         super().__init__(config)
@@ -587,7 +586,7 @@ class OpenAIProvider(ServerInterface):
     def is_available(self) -> bool:
         return bool(self.api_key and self._client)
 
-    def _build_payload(self, request: Request) -> Dict[str, Any]:
+    def _build_payload(self, request: Request) -> dict[str, Any]:
         """Build the API payload from request."""
         config = request.config or self.config
         messages = self.prepare_messages(request)
@@ -679,7 +678,7 @@ import asyncio
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiohttp
 import requests
@@ -708,7 +707,7 @@ class OpenRouterProvider(ServerInterface):
 
     API_BASE = "https://openrouter.ai/api/v1"
 
-    def __init__(self, config: Optional[ServerConfig] = None):
+    def __init__(self, config: ServerConfig | None = None):
         if config is None:
             config = ServerConfig(model_name="anthropic/claude-3-haiku")
         super().__init__(config)
@@ -720,7 +719,7 @@ class OpenRouterProvider(ServerInterface):
     def is_available(self) -> bool:
         return bool(self.api_key)
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Get headers for API requests."""
         return {
             "Authorization": f"Bearer {self.api_key}",
@@ -729,7 +728,7 @@ class OpenRouterProvider(ServerInterface):
             "X-Title": self.app_name,
         }
 
-    def _build_payload(self, request: Request) -> Dict[str, Any]:
+    def _build_payload(self, request: Request) -> dict[str, Any]:
         """Build the API payload from request."""
         config = request.config or self.config
         messages = self.prepare_messages(request)
@@ -874,7 +873,6 @@ DeepEval is a required dependency. Install with: pip install deepeval
 """
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
 
 from deepeval.metrics import GEval, AnswerRelevancyMetric, FaithfulnessMetric
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
@@ -886,11 +884,11 @@ eval_logger = logging.getLogger(__name__)
 
 
 def _build_evaluation_params(
-    input_text: Optional[str],
-    expected_output: Optional[str],
-    context: Optional[str] = None,
-    retrieval_context: Optional[List[str]] = None,
-) -> List[LLMTestCaseParams]:
+    input_text: str | None,
+    expected_output: str | None,
+    context: str | None = None,
+    retrieval_context: list[str] | None = None,
+) -> list[LLMTestCaseParams]:
     """Build evaluation params based on available data."""
     params = [LLMTestCaseParams.ACTUAL_OUTPUT]
     if expected_output:
@@ -906,10 +904,10 @@ def _build_evaluation_params(
 
 def _build_test_case(
     actual_output: str,
-    input_text: Optional[str] = None,
-    expected_output: Optional[str] = None,
-    context: Optional[str] = None,
-    retrieval_context: Optional[List[str]] = None,
+    input_text: str | None = None,
+    expected_output: str | None = None,
+    context: str | None = None,
+    retrieval_context: list[str] | None = None,
 ) -> LLMTestCase:
     """Build an LLMTestCase from available data."""
     return LLMTestCase(
@@ -928,17 +926,17 @@ def _build_test_case(
     aggregation="mean",
 )
 def g_eval_fn(
-    references: List[str],
-    predictions: List[str],
+    references: list[str],
+    predictions: list[str],
     criteria: str = "Determine if the actual output is correct based on the expected output.",
-    evaluation_steps: Optional[List[str]] = None,
+    evaluation_steps: list[str] | None = None,
     judge_model: str = "gpt-4o",
     threshold: float = 0.5,
     strict_mode: bool = False,
     async_mode: bool = True,
-    input_text: Optional[str] = None,
-    context: Optional[str] = None,
-    retrieval_context: Optional[List[str]] = None,
+    input_text: str | None = None,
+    context: str | None = None,
+    retrieval_context: list[str] | None = None,
     **kwargs,
 ) -> float:
     """G-Eval metric using DeepEval's GEval implementation.
@@ -1047,13 +1045,13 @@ def g_eval_fn(
     aggregation="mean",
 )
 def answer_relevancy_fn(
-    references: List[str],
-    predictions: List[str],
+    references: list[str],
+    predictions: list[str],
     judge_model: str = "gpt-4o",
     threshold: float = 0.5,
     strict_mode: bool = False,
     async_mode: bool = True,
-    input_text: Optional[str] = None,
+    input_text: str | None = None,
     **kwargs,
 ) -> float:
     """Answer Relevancy metric using DeepEval.
@@ -1105,14 +1103,14 @@ def answer_relevancy_fn(
     aggregation="mean",
 )
 def faithfulness_fn(
-    references: List[str],
-    predictions: List[str],
+    references: list[str],
+    predictions: list[str],
     judge_model: str = "gpt-4o",
     threshold: float = 0.5,
     strict_mode: bool = False,
     async_mode: bool = True,
-    input_text: Optional[str] = None,
-    retrieval_context: Optional[List[str]] = None,
+    input_text: str | None = None,
+    retrieval_context: list[str] | None = None,
     **kwargs,
 ) -> float:
     """Faithfulness metric using DeepEval.
