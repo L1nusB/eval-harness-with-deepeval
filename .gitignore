@@ -8,6 +8,8 @@ ENV/
 env/
 *.env
 
+lmms-eval/
+
 # Python bytecode and build artifacts
 __pycache__/
 *.py[cod]
