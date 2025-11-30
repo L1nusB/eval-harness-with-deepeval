@@ -132,10 +132,17 @@ File: `lm_eval/api/metrics_llm_judge.py`
 
 ## 11. Testing tasks
 
-- [ ] Unit tests for `protocol.py` and `utils.py` (defaults, prompt building, parsing).
-- [ ] Unit tests for `ServerInterface` (semaphore, `prepare_messages`, `evaluate_batch_async`).
-- [ ] Unit tests for `ProviderFactory` (lazy loading, defaults, error cases, custom registration).
-- [ ] Unit tests for providers (payloads, retries, error handling) using mocks.
-- [ ] Unit tests for DeepEval metrics (argument mapping, criteria vs evaluation_steps, async vs sync) using mocks.
-- [ ] Integration tests for metrics in a `ConfigurableTask`.
+- [x] Unit tests for `protocol.py` and `utils.py` (defaults, prompt building, parsing).
+  - Created `tests/test_llm_judge_protocol.py` - Tests for ServerConfig, Request, Response dataclasses
+  - Created `tests/test_llm_judge_utils.py` - Tests for JudgePromptBuilder and ResponseParser
+- [x] Unit tests for `ServerInterface` (semaphore, `prepare_messages`, `evaluate_batch_async`).
+  - Created `tests/test_llm_judge_base.py` - Tests for abstract base class, semaphore, message preparation
+- [x] Unit tests for `ProviderFactory` (lazy loading, defaults, error cases, custom registration).
+  - Created `tests/test_llm_judge_factory.py` - Tests for provider creation, registration, lazy loading
+- [x] Unit tests for providers (payloads, retries, error handling) using mocks.
+  - Created `tests/test_llm_judge_providers.py` - Tests for OpenAI and OpenRouter providers with mocked API calls
+- [x] Unit tests for DeepEval metrics (argument mapping, criteria vs evaluation_steps, async vs sync) using mocks.
+  - Created `tests/test_llm_judge_metrics.py` - Tests for g_eval, answer_relevancy, faithfulness with mocked DeepEval
+- [x] Integration tests for metrics in a `ConfigurableTask`.
+  - Created `tests/test_llm_judge_integration.py` - Tests for metric resolution, kwargs flow, registry integration
 - [ ] Optional CLI smoke test with a tiny task and low `--limit`.
