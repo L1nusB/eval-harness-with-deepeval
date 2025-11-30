@@ -116,6 +116,20 @@ File: `lm_eval/api/metrics_llm_judge.py`
     - `README.md` - Documentation for all LLM judge metrics
 - [x] Show usage of extra kwargs like `criteria`, `evaluation_steps`, `judge_model`, `threshold`, `async_mode`, `input_text`, `context`, `retrieval_context`.
 
+## 10.5. Documentation (Phase 5 - Practical Considerations)
+
+- [x] Create comprehensive user-facing documentation `docs/llm_judge_usage.md`:
+  - Quick start guide with installation and setup
+  - Detailed documentation for each metric (G-Eval, Answer Relevancy, Faithfulness)
+  - Parameter tables with types and defaults
+  - Architecture overview and package structure
+  - Provider configuration (OpenAI, OpenRouter)
+  - Cost considerations and optimization tips
+  - Troubleshooting guide
+- [x] Update `docs/README.md` to link to LLM Judge documentation
+- [x] Update main `README.md` to mention LLM-as-a-Judge feature
+- [x] Update `docs/task_guide.md` to list LLM Judge metrics in supported metrics section
+
 ## 11. Testing tasks
 
 - [ ] Unit tests for `protocol.py` and `utils.py` (defaults, prompt building, parsing).

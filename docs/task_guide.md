@@ -236,6 +236,14 @@ Metrics:
 - `chrf`
 - `ter`
 
+**LLM-as-a-Judge Metrics** (requires `deepeval` package):
+
+- `g_eval` - Flexible LLM-based evaluation with customizable criteria
+- `answer_relevancy` - Evaluates response relevance to input query (reference-free)
+- `faithfulness` - Evaluates factual consistency with retrieval context (for RAG)
+
+See the [LLM Judge Usage Guide](./llm_judge_usage.md) for detailed configuration.
+
 Aggregation functions:
 
 - `mean`
