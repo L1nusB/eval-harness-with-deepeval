@@ -1,0 +1,96 @@
+# QA with Faithfulness LLM Judge Metric
+#
+# This example demonstrates using the Faithfulness metric for
+# evaluating RAG (Retrieval-Augmented Generation) systems.
+# The metric assesses whether the model's output is factually
+# consistent with the provided retrieval context.
+#
+# Requirements:
+#   - DeepEval installed: pip install deepeval
+#   - OpenAI API key set: export OPENAI_API_KEY="sk-..."
+#
+# Usage:
+#   lm_eval --model hf --model_args pretrained=meta-llama/Llama-3.1-8B-Instruct \
+#           --tasks qa_faithfulness --limit 10
+#
+# Note: This example uses a dataset with context (SQuAD) to demonstrate
+# the faithfulness metric. The retrieval_context is currently static in
+# YAML, so this is a demonstration of the metric configuration rather
+# than a fully dynamic RAG evaluation.
+
+task: qa_faithfulness
+tag:
+  - qa
+  - rag
+  - llm_judge
+  - example
+
+# Using SQuAD which has context passages
+dataset_path: squad
+output_type: generate_until
+
+validation_split: validation
+test_split: null
+
+# Include context in the prompt for the model
+doc_to_text: |
+  Context: {{context}}
+
+  Question: {{question}}
+
+  Answer:
+doc_to_target: "{{answers.text[0] if answers.text else ''}}"
+
+generation_kwargs:
+  do_sample: false
+  temperature: 0.0
+  max_gen_toks: 100
+  until:
+    - "\n"
+    - "Question:"
+    - "Context:"
+    - "</s>"
+    - "<|im_end|>"
+
+filter_list:
+  - name: remove_whitespace
+    filter:
+      - function: remove_whitespace
+      - function: take_first
+
+metric_list:
+  # Traditional exact match for comparison
+  - metric: exact_match
+    aggregation: mean
+    higher_is_better: true
+    ignore_case: true
+    ignore_punctuation: true
+
+  # F1 score for partial matching
+  - metric: f1
+    aggregation: mean
+    higher_is_better: true
+
+  # Faithfulness metric for RAG evaluation
+  # Note: In the current implementation, retrieval_context must be
+  # provided as static kwargs. For per-example context, a future
+  # extension with doc_to_metric_inputs would be needed.
+  #
+  # For now, this demonstrates the metric configuration.
+  # In practice, you would either:
+  # 1. Use a custom process_results function to inject context
+  # 2. Wait for the doc_to_input enhancement
+  - metric: faithfulness
+    aggregation: mean
+    higher_is_better: true
+    judge_model: gpt-4o
+    threshold: 0.5
+    strict_mode: false
+    async_mode: true
+
+num_fewshot: 0
+repeats: 1
+
+metadata:
+  version: 1.0
+  description: "Example task demonstrating Faithfulness metric for RAG evaluation"

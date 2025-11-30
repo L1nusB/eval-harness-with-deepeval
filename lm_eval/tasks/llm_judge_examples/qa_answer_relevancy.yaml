@@ -1,0 +1,74 @@
+# QA with Answer Relevancy LLM Judge Metric
+#
+# This example demonstrates using the Answer Relevancy metric for
+# evaluating how relevant a model's response is to the input question.
+# This is a reference-free metric - it only evaluates the relationship
+# between input and output, not correctness against a gold answer.
+#
+# Requirements:
+#   - DeepEval installed: pip install deepeval
+#   - OpenAI API key set: export OPENAI_API_KEY="sk-..."
+#
+# Usage:
+#   lm_eval --model hf --model_args pretrained=meta-llama/Llama-3.1-8B-Instruct \
+#           --tasks qa_answer_relevancy --limit 10
+
+task: qa_answer_relevancy
+tag:
+  - qa
+  - llm_judge
+  - example
+
+# Using TriviaQA for demonstration
+dataset_path: trivia_qa
+dataset_name: rc.nocontext
+output_type: generate_until
+
+validation_split: validation
+test_split: null
+
+doc_to_text: "Question: {{question}}\n\nAnswer:"
+doc_to_target: "{{answer.aliases[0] if answer.aliases else answer.value}}"
+
+generation_kwargs:
+  do_sample: false
+  temperature: 0.0
+  max_gen_toks: 100
+  until:
+    - "\n"
+    - "Question:"
+    - "</s>"
+    - "<|im_end|>"
+
+filter_list:
+  - name: remove_whitespace
+    filter:
+      - function: remove_whitespace
+      - function: take_first
+
+metric_list:
+  # Traditional exact match for comparison
+  - metric: exact_match
+    aggregation: mean
+    higher_is_better: true
+    ignore_case: true
+    ignore_punctuation: true
+
+  # Answer Relevancy metric
+  # Note: This metric evaluates if the answer is relevant to the question,
+  # not whether it's factually correct. A wrong but on-topic answer can
+  # still score highly on relevancy.
+  - metric: answer_relevancy
+    aggregation: mean
+    higher_is_better: true
+    judge_model: gpt-4o
+    threshold: 0.5
+    strict_mode: false
+    async_mode: true
+
+num_fewshot: 0
+repeats: 1
+
+metadata:
+  version: 1.0
+  description: "Example task demonstrating Answer Relevancy metric"

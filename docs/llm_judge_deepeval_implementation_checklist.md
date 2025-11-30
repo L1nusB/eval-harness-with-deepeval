@@ -107,8 +107,14 @@ File: `lm_eval/api/metrics_llm_judge.py`
 
 ## 10. Example YAML usage (Phase 4)
 
-- [ ] Add or update a small `lm_eval/tasks/**` YAML demonstrating the new metrics for a `generate_until` task.
-- [ ] Show usage of extra kwargs like `criteria`, `evaluation_steps`, `judge_model`, `threshold`, `async_mode`, `input_text`, `context`, `retrieval_context`.
+- [x] Add or update a small `lm_eval/tasks/**` YAML demonstrating the new metrics for a `generate_until` task.
+  - Created `lm_eval/tasks/gsm8k/gsm8k_g_eval.yaml` - GSM8K with G-Eval for math reasoning
+  - Created `lm_eval/tasks/llm_judge_examples/` directory with comprehensive examples:
+    - `qa_g_eval.yaml` - G-Eval with criteria and evaluation steps
+    - `qa_answer_relevancy.yaml` - Answer Relevancy metric
+    - `qa_faithfulness.yaml` - Faithfulness metric for RAG
+    - `README.md` - Documentation for all LLM judge metrics
+- [x] Show usage of extra kwargs like `criteria`, `evaluation_steps`, `judge_model`, `threshold`, `async_mode`, `input_text`, `context`, `retrieval_context`.
 
 ## 11. Testing tasks
 
