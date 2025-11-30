@@ -4,7 +4,18 @@ This checklist operationalizes `docs/llm_judge_deepeval_integration_plan_detaile
 
 ---
 
-## 1. Create lm_eval.llm_judge package scaffold
+## 0. Phase 1: Baseline & Scope (Documentation)
+
+Phase 1 from the detailed plan is the baseline and scoping phase. This work is complete:
+
+- [x] Document motivation and high-level goals (see `llm_judge_deepeval_integration_plan_detailed.md` §1.1)
+- [x] Analyze current metrics pipeline (see `metrics_workflow_analysis.md`)
+- [x] Define target architecture (see `llm_judge_deepeval_integration_plan_detailed.md` §1.3)
+- [x] Document non-goals and out-of-scope items (see `llm_judge_deepeval_integration_plan_detailed.md` §1.4)
+
+---
+
+## 1. Create lm_eval.llm_judge package scaffold (Phase 2)
 
 - [ ] Create directory structure:
   - `lm_eval/llm_judge/__init__.py`
