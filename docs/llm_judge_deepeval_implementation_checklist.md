@@ -94,16 +94,16 @@ File: `lm_eval/llm_judge/providers/openrouter.py`
 
 File: `lm_eval/api/metrics_llm_judge.py`
 
-- [ ] Implement `_build_evaluation_params` and `_build_test_case` as described in the plan.
-- [ ] Implement `g_eval_fn` wrapper around `GEval`, enforcing `criteria` vs `evaluation_steps` precedence.
-- [ ] Implement `answer_relevancy_fn` wrapper around `AnswerRelevancyMetric` (reference-free, uses `input_text` and `predictions`).
-- [ ] Implement `faithfulness_fn` wrapper around `FaithfulnessMetric` (uses `input_text`, `predictions`, `retrieval_context`).
-- [ ] Register all three metrics with `@register_metric` and correct `output_type`, `aggregation`, `higher_is_better`.
+- [x] Implement `_build_evaluation_params` and `_build_test_case` as described in the plan.
+- [x] Implement `g_eval_fn` wrapper around `GEval`, enforcing `criteria` vs `evaluation_steps` precedence.
+- [x] Implement `answer_relevancy_fn` wrapper around `AnswerRelevancyMetric` (reference-free, uses `input_text` and `predictions`).
+- [x] Implement `faithfulness_fn` wrapper around `FaithfulnessMetric` (uses `input_text`, `predictions`, `retrieval_context`).
+- [x] Register all three metrics with `@register_metric` and correct `output_type`, `aggregation`, `higher_is_better`.
 
 ## 9. Wire metrics into lm-eval
 
-- [ ] Add a guarded import of `lm_eval.api.metrics_llm_judge` in the central metrics registry so missing `deepeval` does not break imports.
-- [ ] Verify that metrics `"g_eval"`, `"answer_relevancy"`, and `"faithfulness"` resolve via the registry.
+- [x] Add a guarded import of `lm_eval.api.metrics_llm_judge` in the central metrics registry so missing `deepeval` does not break imports.
+- [x] Verify that metrics `"g_eval"`, `"answer_relevancy"`, and `"faithfulness"` resolve via the registry.
 
 ## 10. Example YAML usage (Phase 4)
 
