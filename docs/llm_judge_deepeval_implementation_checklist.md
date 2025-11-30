@@ -17,7 +17,7 @@ Phase 1 from the detailed plan is the baseline and scoping phase. This work is c
 
 ## 1. Create lm_eval.llm_judge package scaffold (Phase 2)
 
-- [ ] Create directory structure:
+- [x] Create directory structure:
   - `lm_eval/llm_judge/__init__.py`
   - `lm_eval/llm_judge/protocol.py`
   - `lm_eval/llm_judge/base.py`
@@ -26,71 +26,71 @@ Phase 1 from the detailed plan is the baseline and scoping phase. This work is c
   - `lm_eval/llm_judge/providers/__init__.py`
   - `lm_eval/llm_judge/providers/openai.py`
   - `lm_eval/llm_judge/providers/openrouter.py`
-- [ ] In `__init__.py`, re-export core types: `ServerConfig`, `Request`, `Response`, `ServerInterface`, `ProviderFactory`.
+- [x] In `__init__.py`, re-export core types: `ServerConfig`, `Request`, `Response`, `ServerInterface`, `ProviderFactory`.
 
 ## 2. Implement protocol dataclasses
 
 File: `lm_eval/llm_judge/protocol.py`
 
-- [ ] Add constants: `DEFAULT_NUM_RETRIES`, `DEFAULT_RETRY_DELAY`, `DEFAULT_TIMEOUT`.
-- [ ] Implement `ServerConfig` with fields and defaults from the plan, using built-in generics and `| None`.
-- [ ] Implement `Request` with `messages: list[dict[str, Any]]` and optional metadata fields (`question`, `answer`, `prediction`, `context`, `prompt_kwargs`).
-- [ ] Implement `Response` with `content`, `model_used`, optional `usage`, `raw_response`, `parsed_result`, `success`, `error_message`.
-- [ ] Add docstrings explaining each field and how these types are used by providers/metrics.
+- [x] Add constants: `DEFAULT_NUM_RETRIES`, `DEFAULT_RETRY_DELAY`, `DEFAULT_TIMEOUT`.
+- [x] Implement `ServerConfig` with fields and defaults from the plan, using built-in generics and `| None`.
+- [x] Implement `Request` with `messages: list[dict[str, Any]]` and optional metadata fields (`question`, `answer`, `prediction`, `context`, `prompt_kwargs`).
+- [x] Implement `Response` with `content`, `model_used`, optional `usage`, `raw_response`, `parsed_result`, `success`, `error_message`.
+- [x] Add docstrings explaining each field and how these types are used by providers/metrics.
 
 ## 3. Implement ServerInterface base class
 
 File: `lm_eval/llm_judge/base.py`
 
-- [ ] Implement constructor taking `ServerConfig | None`, defaulting to `ServerConfig(model_name="gpt-4o")`.
-- [ ] Implement lazy `semaphore` property using `config.max_concurrent`.
-- [ ] Declare abstract methods: `evaluate`, `evaluate_async`, `is_available`.
-- [ ] Implement `prepare_messages` to insert a `system` message when `config.system_prompt` is set.
-- [ ] Implement `evaluate_batch_async` using the semaphore to bound concurrency.
-- [ ] Implement `evaluate_score` and `evaluate_score_async` using `JudgePromptBuilder` and `ResponseParser`.
+- [x] Implement constructor taking `ServerConfig | None`, defaulting to `ServerConfig(model_name="gpt-4o")`.
+- [x] Implement lazy `semaphore` property using `config.max_concurrent`.
+- [x] Declare abstract methods: `evaluate`, `evaluate_async`, `is_available`.
+- [x] Implement `prepare_messages` to insert a `system` message when `config.system_prompt` is set.
+- [x] Implement `evaluate_batch_async` using the semaphore to bound concurrency.
+- [x] Implement `evaluate_score` and `evaluate_score_async` using `JudgePromptBuilder` and `ResponseParser`.
 
 ## 4. Implement utils: JudgePromptBuilder & ResponseParser
 
 File: `lm_eval/llm_judge/utils.py`
 
-- [ ] Define `DEFAULT_SCORE_PROMPT` exactly as in the plan.
-- [ ] Implement `JudgePromptBuilder.build_score_prompt` with optional template override.
-- [ ] Implement `JudgePromptBuilder.build_geval_prompt` with criteria, optional evaluation steps, input, outputs, context, retrieval context.
-- [ ] Implement `ResponseParser.parse_score_response` (regex numeric extraction and clamping).
-- [ ] Implement `ResponseParser.parse_json_response` (direct parse, then embedded JSON fallback).
+- [x] Define `DEFAULT_SCORE_PROMPT` exactly as in the plan.
+- [x] Implement `JudgePromptBuilder.build_score_prompt` with optional template override.
+- [x] Implement `JudgePromptBuilder.build_geval_prompt` with criteria, optional evaluation steps, input, outputs, context, retrieval context.
+- [x] Implement `ResponseParser.parse_score_response` (regex numeric extraction and clamping).
+- [x] Implement `ResponseParser.parse_json_response` (direct parse, then embedded JSON fallback).
 
 ## 5. Implement ProviderFactory
 
 File: `lm_eval/llm_judge/factory.py`
 
-- [ ] Maintain `_provider_classes: dict[str, type[ServerInterface]]`.
-- [ ] Implement `_lazy_load_providers` to import/register `OpenAIProvider` and `OpenRouterProvider`, logging missing deps instead of failing.
-- [ ] Implement `create_provider` with precedence: explicit arg → `JUDGE_API_TYPE` env var → default `"openai"`.
-- [ ] On unknown provider type, raise `ValueError` listing available providers.
-- [ ] Implement `register_provider` for custom providers and `available_providers` to list names.
+- [x] Maintain `_provider_classes: dict[str, type[ServerInterface]]`.
+- [x] Implement `_lazy_load_providers` to import/register `OpenAIProvider` and `OpenRouterProvider`, logging missing deps instead of failing.
+- [x] Implement `create_provider` with precedence: explicit arg → `JUDGE_API_TYPE` env var → default `"openai"`.
+- [x] On unknown provider type, raise `ValueError` listing available providers.
+- [x] Implement `register_provider` for custom providers and `available_providers` to list names.
 
 ## 6. Implement OpenAI provider
 
 File: `lm_eval/llm_judge/providers/openai.py`
 
-- [ ] Read `OPENAI_API_KEY` and `OPENAI_API_BASE` env vars.
-- [ ] Lazily construct `OpenAI` and `AsyncOpenAI` clients; log a warning if the package is missing.
-- [ ] Implement `is_available` based on API key and client presence.
-- [ ] Implement `_build_payload` using `Request` + `ServerConfig`, supporting `top_p` and optional JSON `response_format`.
-- [ ] Implement `evaluate` with retry loop over `config.num_retries`, sleeping `retry_delay` between attempts, returning `Response` with usage and errors.
-- [ ] Implement `evaluate_async` analogously using the async client and `asyncio.sleep`.
+- [x] Read `OPENAI_API_KEY` and `OPENAI_API_BASE` env vars.
+- [x] Lazily construct `OpenAI` and `AsyncOpenAI` clients; log a warning if the package is missing.
+- [x] Implement `is_available` based on API key and client presence.
+- [x] Implement `_build_payload` using `Request` + `ServerConfig`, supporting `top_p` and optional JSON `response_format`.
+- [x] Implement `evaluate` with retry loop over `config.num_retries`, sleeping `retry_delay` between attempts, returning `Response` with usage and errors.
+- [x] Implement `evaluate_async` analogously using the async client and `asyncio.sleep`.
 
 ## 7. Implement OpenRouter provider
 
 File: `lm_eval/llm_judge/providers/openrouter.py`
 
-- [ ] Read `OPENROUTER_API_KEY`, `OPENROUTER_SITE_URL`, `OPENROUTER_APP_NAME` env vars.
-- [ ] Implement `_get_headers` including authorization, referer, and app name.
-- [ ] Implement `_build_payload` mirroring OpenAI provider semantics.
-- [ ] Implement sync `evaluate` using `requests.post` with retries and clear error reporting.
-- [ ] Implement async `evaluate_async` using `aiohttp.ClientSession` with retries and timeout.
+- [x] Read `OPENROUTER_API_KEY`, `OPENROUTER_SITE_URL`, `OPENROUTER_APP_NAME` env vars.
+- [x] Implement `_get_headers` including authorization, referer, and app name.
+- [x] Implement `_build_payload` mirroring OpenAI provider semantics.
+- [x] Implement sync `evaluate` using `requests.post` with retries and clear error reporting.
+- [x] Implement async `evaluate_async` using `aiohttp.ClientSession` with retries and timeout.
 
-## 8. Implement DeepEval-backed metrics
+## 8. Implement DeepEval-backed metrics (Phase 3)
 
 File: `lm_eval/api/metrics_llm_judge.py`
 
@@ -105,7 +105,7 @@ File: `lm_eval/api/metrics_llm_judge.py`
 - [ ] Add a guarded import of `lm_eval.api.metrics_llm_judge` in the central metrics registry so missing `deepeval` does not break imports.
 - [ ] Verify that metrics `"g_eval"`, `"answer_relevancy"`, and `"faithfulness"` resolve via the registry.
 
-## 10. Example YAML usage
+## 10. Example YAML usage (Phase 4)
 
 - [ ] Add or update a small `lm_eval/tasks/**` YAML demonstrating the new metrics for a `generate_until` task.
 - [ ] Show usage of extra kwargs like `criteria`, `evaluation_steps`, `judge_model`, `threshold`, `async_mode`, `input_text`, `context`, `retrieval_context`.
@@ -119,4 +119,3 @@ File: `lm_eval/api/metrics_llm_judge.py`
 - [ ] Unit tests for DeepEval metrics (argument mapping, criteria vs evaluation_steps, async vs sync) using mocks.
 - [ ] Integration tests for metrics in a `ConfigurableTask`.
 - [ ] Optional CLI smoke test with a tiny task and low `--limit`.
-
