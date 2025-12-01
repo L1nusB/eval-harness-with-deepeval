@@ -50,6 +50,7 @@ This project provides a unified framework to test generative language models on 
 - Support for local models and benchmarks.
 - Evaluation with publicly available prompts ensures reproducibility and comparability between papers.
 - Easy support for custom prompts and evaluation metrics.
+- **LLM-as-a-Judge evaluation** powered by [DeepEval](https://github.com/confident-ai/deepeval), including G-Eval, Answer Relevancy, and Faithfulness metrics. See the [LLM Judge Usage Guide](docs/llm_judge_usage.md).
 
 The Language Model Evaluation Harness is the backend for 🤗 Hugging Face's popular [Open LLM Leaderboard](https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard), has been used in [hundreds of papers](https://scholar.google.com/scholar?oi=bibs&hl=en&authuser=2&cites=15052937328817631261,4097184744846514103,1520777361382155671,17476825572045927382,18443729326628441434,14801318227356878622,7890865700763267262,12854182577605049984,15641002901115500560,5104500764547628290), and is used internally by dozens of organizations including NVIDIA, Cohere, BigScience, BigCode, Nous Research, and Mosaic ML.
 

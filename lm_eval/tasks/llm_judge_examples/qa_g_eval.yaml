@@ -1,0 +1,88 @@
+# QA with G-Eval LLM Judge Metric
+#
+# This example demonstrates using the G-Eval metric for evaluating
+# question-answering tasks. G-Eval uses an LLM judge to assess
+# response quality based on customizable criteria.
+#
+# Requirements:
+#   - DeepEval installed: pip install deepeval
+#   - OpenAI API key set: export OPENAI_API_KEY="sk-..."
+#
+# Usage:
+#   lm_eval --model hf --model_args pretrained=meta-llama/Llama-3.1-8B-Instruct \
+#           --tasks qa_g_eval --limit 10
+
+task: qa_g_eval
+tag:
+  - qa
+  - llm_judge
+  - example
+
+# Using TriviaQA as the source dataset
+dataset_path: trivia_qa
+dataset_name: rc.nocontext
+output_type: generate_until
+
+validation_split: validation
+test_split: null
+
+doc_to_text: "Question: {{question}}\n\nAnswer:"
+doc_to_target: "{{answer.aliases[0] if answer.aliases else answer.value}}"
+
+generation_kwargs:
+  do_sample: false
+  temperature: 0.0
+  max_gen_toks: 100
+  until:
+    - "\n"
+    - "Question:"
+    - "</s>"
+    - "<|im_end|>"
+
+filter_list:
+  - name: remove_whitespace
+    filter:
+      - function: remove_whitespace
+      - function: take_first
+
+metric_list:
+  # Traditional exact match for comparison
+  - metric: exact_match
+    aggregation: mean
+    higher_is_better: true
+    ignore_case: true
+    ignore_punctuation: true
+
+  # G-Eval with custom criteria for QA evaluation
+  - metric: g_eval
+    aggregation: mean
+    higher_is_better: true
+    criteria: |
+      Evaluate whether the provided answer correctly addresses the question.
+      Consider:
+      1. Factual accuracy - is the answer correct?
+      2. Completeness - does the answer fully address the question?
+      3. Clarity - is the answer clear and unambiguous?
+    judge_model: gpt-4o
+    threshold: 0.5
+    strict_mode: false
+    async_mode: true
+
+  # G-Eval with explicit evaluation steps
+  - metric: g_eval
+    aggregation: mean
+    higher_is_better: true
+    evaluation_steps:
+      - "Determine if the actual output contains the correct factual information"
+      - "Check if the answer matches or is semantically equivalent to the expected output"
+      - "Assess if the answer is complete without extraneous information"
+    judge_model: gpt-4o
+    threshold: 0.5
+    async_mode: true
+
+num_fewshot: 0
+repeats: 1
+
+metadata:
+  version: 1.0
+  description: "Example task demonstrating G-Eval metric for QA evaluation"

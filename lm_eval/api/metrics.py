@@ -637,3 +637,12 @@ def aggregate_subtask_metrics(metrics, sizes, weight_by_size=True):
     assert len(metrics) == len(sizes)
 
     return sum([metric * size for metric, size in zip(metrics, sizes)]) / sum(sizes)
+
+
+# Import LLM judge metrics to register them
+# Guarded import: if deepeval is not installed, judge-backed metrics
+# are simply not registered and attempting to use them will fail gracefully
+try:
+    import lm_eval.api.metrics_llm_judge  # noqa: F401
+except ImportError:
+    pass  # LLM judge metrics not available (deepeval not installed)
